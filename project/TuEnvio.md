@@ -1,3 +1,5 @@
+## Integrante
+- Dario Rodríguez Llosa C-412
 ## Descripción del problema
 Durante la covid el país para evitar las inmensas colas optó por el comercio electrónico, el cual ha sufrido bastantes problemas a lo largo del tiempo y debido a las actuales circunstancias **TuEnvio** enfrenta el desafío de planificar y gestionar de manera eficiente su cadena de suministro, que abarca múltiples niveles y medios de transporte. Sus operaciones incluyen el movimiento de bienes desde proveedores internacionales hasta centros de distribución y, posteriormente, a los consumidores finales. La empresa debe coordinar una red compleja que utiliza distintos modos de transporte, incluyendo trenes, barcos, aviones y camiones, cada uno con sus propias capacidades y costos. Un problema crítico para TuEnvio es garantizar que los bienes sean transportados de manera eficiente mientras se minimizan los costos y se cumplen las restricciones de capacidad en cada medio de transporte.
 
