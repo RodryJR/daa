@@ -1,9 +1,9 @@
 import random
 import copy
 import heapq
-from fitness import fitness
-from cross_over import cross_over
-from generate_route import generate_route
+from metaheuristics.fitness import fitness
+from metaheuristics.cross_over import cross_over
+from metaheuristics.generate_route import generate_route
 
 class GeneticAlgorithm:
     def __init__(self, clients, clients_id, vehicle_capacities, count_vehicle, depots):

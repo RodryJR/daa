@@ -3,35 +3,7 @@ import heapq
 import random
 from time import time
 from metaheuristics.Genetic_Algorithm import GeneticAlgorithm,genetic_algorithm
-
-
-def run():
-    clients_vehicles = data
-    clients_id = clients_vehicles['clients']
-    demands_position = clients_vehicles['clients_vehicles']
-    distances = clients_vehicles['distance_matrix']
-    depots = clients_vehicles['depots']
-    time_windows = clients_vehicles['time_windows']
-    clients_vehicles['potholes_matrix'] =[[0 for _ in range(32)] for _ in range(32)] # Matriz de baches
-    max_potholes = 50  # Límite de baches por ruta
-    vehicle_capacities = clients_vehicles['vehicle_capacities']
-    count_vehicle = clients_vehicles['max_vehicle_number']
-    
-    print(f'CANTIDAD DE VEHÍCULOS = {count_vehicle}')
-    print(f'CAPACIDADES DE LOS VEHÍCULOS = {vehicle_capacities}')
-    print(f'DEPÓSITOS DISPONIBLES = {depots}\n')
-    
-    start_time = time()
-    instance = GeneticAlgorithm(demands_position, clients_id, vehicle_capacities, count_vehicle, depots)
-    _, cost, routes = genetic_algorithm(instance, 2, 2500, 800, 0.85, 0.05, distances, time_windows, clients_vehicles['potholes_matrix'], max_potholes)
-    
-    print('RUTAS')
-    for i, r in enumerate(routes):
-        print(f'RUTA {i+1} : {r}')
-    
-    print(f'\nFITNESS = {round(cost[0], 3)}')
-    end_time = time()
-    print(f'TIEMPO DE EJECUCIÓN = {round(end_time - start_time, 3)} segundos')
+import numpy as np
 
 data = {
     "max_vehicle_number": 5,
@@ -142,5 +114,82 @@ data = {
 # Extraer IDs de clientes excluyendo el depósito (0)
 data["clients_id"] = list(map(int, data["clients_vehicles"].keys()))
 
-if __name__ == '__main__':
-    run()
+# Definir el número de ejecuciones
+num_ejecuciones = 100
+
+# Nombre del archivo donde se guardarán los resultados
+archivo_resultados = "test/result.txt"
+
+# Listas para almacenar los resultados
+soluciones = []
+tiempos = []
+metricas = []
+
+def run():
+    clients_vehicles = data
+    clients_id = clients_vehicles['clients']
+    demands_position = clients_vehicles['clients_vehicles']
+    distances = clients_vehicles['distance_matrix']
+    depots = clients_vehicles['depots']
+    time_windows = clients_vehicles['time_windows']
+    clients_vehicles['potholes_matrix'] =[[0 for _ in range(32)] for _ in range(32)] # Matriz de baches
+    max_potholes = 50  # Límite de baches por ruta
+    vehicle_capacities = clients_vehicles['vehicle_capacities']
+    count_vehicle = clients_vehicles['max_vehicle_number']
+    
+    start_time = time()
+    instance = GeneticAlgorithm(demands_position, clients_id, vehicle_capacities, count_vehicle, depots)
+    _, cost, routes = genetic_algorithm(instance, 2, 500, 500, 0.85, 0.05, distances, time_windows, clients_vehicles['potholes_matrix'], max_potholes)
+    end_time = time()
+
+    metrica = (round(cost[0],3) - 787) / 78700
+
+    return round(cost[0],3),round(end_time-start_time,3),metrica,routes
+
+
+# Crear y abrir el archivo en modo escritura (sobreescribirá si ya existe)
+with open(archivo_resultados, "w") as file:
+    file.write("Iteración, Solución, Tiempo (s), Métrica\n")  # Escribir encabezado
+
+# Ejecutar el algoritmo 100 veces y guardar los resultados
+for i in range(1, num_ejecuciones + 1):
+    solucion, tiempo, metrica,routes = run()
+    soluciones.append(solucion)
+    tiempos.append(tiempo)
+    metricas.append(metrica)
+
+    # Guardar cada resultado en el archivo
+    with open(archivo_resultados, "a") as file:
+        file.write(f"{i}, {solucion:.2f}, {tiempo:.6f}, {metrica:.6f}\n")
+        file.write(f'RUTAS\n')
+        for i, r in enumerate(routes):
+            file.write(f'RUTA {i+1} : {r}\n')
+        file.write(f'################################################################################################\n')
+        file.write(f'################################################################################################\n')
+
+# Calcular estadísticas
+mejor_solucion = min(soluciones)
+peor_solucion = max(soluciones)
+promedio_soluciones = np.mean(soluciones)
+
+mejor_tiempo = min(tiempos)
+peor_tiempo = max(tiempos)
+promedio_tiempos = np.mean(tiempos)
+total_tiempos = sum(tiempos)
+
+mejor_metrica = min(metricas)
+peor_metrica = max(metricas)
+promedio_metricas = np.mean(metricas)
+
+# Imprimir los resultados
+print(f"Cantidad de iteraciones: {num_ejecuciones}")
+print(f"Mejor solución: {mejor_solucion:.2f}")
+print(f"Peor solución: {peor_solucion:.2f}")
+print(f"Promedio de las soluciones: {promedio_soluciones:.2f}")
+print(f"Mejor tiempo de ejecución (segundos): {mejor_tiempo:.6f}")
+print(f"Peor tiempo de ejecución (segundos): {peor_tiempo:.6f}")
+print(f"Promedio de los tiempos (segundos): {promedio_tiempos:.6f}")
+print(f"Total de los tiempos (segundos): {total_tiempos:.6f}")
+print(f"Mejor métrica de evaluación: {mejor_metrica:.6f}")
+print(f"Peor métrica de evaluación: {peor_metrica:.6f}")
+print(f"Promedio de las métricas: {promedio_metricas:.6f}")

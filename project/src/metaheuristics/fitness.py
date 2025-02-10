@@ -1,4 +1,4 @@
-from generate_route import generate_route
+from metaheuristics.generate_route import generate_route
 
 def fitness(individue, metaheuristic, distances, time_windows, potholes_matrix, max_potholes):
     route = generate_route(individue, metaheuristic)
