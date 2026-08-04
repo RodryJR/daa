@@ -28,7 +28,7 @@ def construir_modelo(inst):
                 if i != j:
                     d = inst.dist_km[i][j]
                     m.tiempo_arco[iv, i, j] = round(d / v.velocidad_kmh * 60)
-                    m.costo_arco[iv, i, j] = round(
+                    m.costo_arco[iv, i, j] = 0 if (j == 0 and not v.regresa_a_base) else round(
                         d * (v.consumo_litros_km * inst.precio_litro + v.salario_por_km) * 100)
 
     for iv, v in enumerate(inst.vehiculos):

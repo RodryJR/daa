@@ -67,7 +67,8 @@ def _extraer(inst, m, solver, status):
         while True:
             siguiente = next(j for j in range(len(inst.puntos) + 1)
                              if j != nodo and solver.Value(m.x[iv, nodo, j]))
-            km += inst.dist_km[nodo][siguiente]
+            if not (siguiente == 0 and not v.regresa_a_base):
+                km += inst.dist_km[nodo][siguiente]
             if siguiente == 0:
                 break
             orden.append(siguiente)
