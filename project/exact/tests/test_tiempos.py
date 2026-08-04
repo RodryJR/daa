@@ -61,3 +61,28 @@ def test_descarga_al_final_del_horizonte_es_factible():
     assert sol["estado"] == "OPTIMO"
     hora = sol["rutas"][0]["paradas"][0]["llegada"]["hora"]
     assert "23:50" <= hora <= "23:55"
+
+def test_cierre_pasada_la_medianoche_marca_dia_siguiente():
+    # con salario por hora, el solver fija llegada 23:50, salida 23:20 y
+    # regreso 00:30 del dia siguiente
+    data = _data(vehiculos=[vehiculo(salario_por_hora=60)],
+                 puntos=[punto(id="a", tiempo_descarga_min=10)],
+                 matriz_distancias_km=[[0, 30], [30, 0]])
+    data["puntos"][0]["ventanas"] = [{"desde": "23:50", "hasta": "23:55"}]
+    sol = resolver(data)
+    assert sol["estado"] == "OPTIMO"
+    assert sol["rutas"][0]["sale_de_base"] == {"hora": "23:20"}
+    assert sol["rutas"][0]["regresa_a_base"] == {"hora": "00:30", "dia_siguiente": True}
+
+
+def test_cierre_pasado_el_horizonte_semanal_no_crashea():
+    data = _data(vehiculos=[vehiculo(salario_por_hora=60)],
+                 puntos=[punto(id="a", tiempo_descarga_min=10)],
+                 matriz_distancias_km=[[0, 30], [30, 0]])
+    data["modo"] = "varios_dias"
+    data["horizonte_dias"] = 7
+    data["puntos"][0]["ventanas"] = [{"dia": "domingo", "desde": "23:50", "hasta": "23:55"}]
+    sol = resolver(data)
+    assert sol["estado"] == "OPTIMO"
+    paradas = sol["rutas"][0]["paradas"]
+    assert paradas[0]["fin_descarga"] == {"dia": "lunes", "hora": "00:00", "semana_siguiente": True}

@@ -13,10 +13,21 @@ def _estado(status):
 
 
 def _momento(minuto, modo):
+    '''
+    Los eventos de cierre (fin de descarga, regreso) pueden caer pasado el
+    fin del horizonte; se marca el desborde en vez de crashear o mentir.
+    '''
     hora = f"{(minuto % MINUTOS_DIA) // 60:02d}:{minuto % 60:02d}"
+    dias = minuto // MINUTOS_DIA
     if modo == "un_dia":
-        return {"hora": hora}
-    return {"dia": DIAS[minuto // MINUTOS_DIA], "hora": hora}
+        momento = {"hora": hora}
+        if dias > 0:
+            momento["dia_siguiente"] = True
+        return momento
+    momento = {"dia": DIAS[dias % 7], "hora": hora}
+    if dias >= 7:
+        momento["semana_siguiente"] = True
+    return momento
 
 
 def resolver(data):
