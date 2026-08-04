@@ -65,5 +65,41 @@ def construir_modelo(inst):
                 costo.append(m.costo_arco[iv, i, j] * lit)
     for iv, v in enumerate(inst.vehiculos):
         costo.append(v.salario_fijo_cent * m.usado[iv])
+
+    H = inst.horizonte_min
+    m.makespan = m.model.NewIntVar(0, H, "makespan")
+    for p in range(1, n + 1):
+        pt = inst.puntos[p - 1]
+        tope = H - 1 if pt.limite_min is None else min(H - 1, pt.limite_min)
+        llegada = m.model.NewIntVar(0, tope, f"llegada_{pt.id}")
+        m.llegada.append(llegada)
+        if pt.ventanas:
+            elegida = [m.model.NewBoolVar(f"vent_{pt.id}_{k}")
+                       for k in range(len(pt.ventanas))]
+            m.model.AddExactlyOne(elegida)
+            for k, (ini, fin) in enumerate(pt.ventanas):
+                m.model.Add(llegada >= ini).OnlyEnforceIf(elegida[k])
+                m.model.Add(llegada <= fin).OnlyEnforceIf(elegida[k])
+        m.model.Add(m.makespan >= llegada + pt.descarga_min)
+
+    for iv, v in enumerate(inst.vehiculos):
+        salida = m.model.NewIntVar(v.turno_ini, v.turno_fin, f"salida_{v.id}")
+        fin = m.model.NewIntVar(v.turno_ini, v.turno_fin, f"fin_{v.id}")
+        m.salida.append(salida)
+        m.fin_ruta.append(fin)
+        m.model.Add(fin == salida).OnlyEnforceIf(m.usado[iv].Not())
+        for j in range(1, n + 1):
+            m.model.Add(m.llegada[j - 1] >= salida + m.tiempo_arco[iv, 0, j]
+                        ).OnlyEnforceIf(m.x[iv, 0, j])
+        for i in range(1, n + 1):
+            desc = inst.puntos[i - 1].descarga_min
+            for j in range(1, n + 1):
+                if i != j:
+                    m.model.Add(m.llegada[j - 1] >= m.llegada[i - 1] + desc
+                                + m.tiempo_arco[iv, i, j]).OnlyEnforceIf(m.x[iv, i, j])
+            regreso = m.tiempo_arco[iv, i, 0] if v.regresa_a_base else 0
+            m.model.Add(fin >= m.llegada[i - 1] + desc + regreso
+                        ).OnlyEnforceIf(m.x[iv, i, 0])
+        costo.append(v.salario_cent_min * (fin - salida))
     m.costo_cent = sum(costo)
     return m
