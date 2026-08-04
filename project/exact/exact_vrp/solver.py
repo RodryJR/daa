@@ -37,11 +37,23 @@ def resolver(data):
         return {"estado": "INFACTIBLE", "motivo": "; ".join(errores)}
 
     m = construir_modelo(inst)
-    m.model.Minimize(m.costo_cent)
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = inst.limite_solver_s
     solver.parameters.num_workers = 8
-    status = solver.Solve(m.model)
+
+    if inst.objetivo == "tiempo":
+        m.model.Minimize(m.makespan)
+        status = solver.Solve(m.model)
+    elif inst.objetivo == "costo":
+        m.model.Minimize(m.costo_cent)
+        status = solver.Solve(m.model)
+    else:  # costo_luego_tiempo
+        m.model.Minimize(m.costo_cent)
+        status = solver.Solve(m.model)
+        if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            m.model.Add(m.costo_cent <= round(solver.ObjectiveValue()))
+            m.model.Minimize(m.makespan)
+            status = solver.Solve(m.model)
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         salida = {"estado": _estado(status)}
@@ -105,10 +117,13 @@ def _extraer(inst, m, solver, status):
     objetivo = solver.ObjectiveValue()
     gap = 0.0 if status == cp_model.OPTIMAL or objetivo == 0 else round(
         abs(objetivo - solver.BestObjectiveBound()) / objetivo, 4)
+    # no usar ObjectiveValue() como costo: en modo tiempo (y en la fase 2 del
+    # lexicografico) lo que se minimizo fue el makespan, no el dinero
+    costo_total = round(combustible + fijos + salarios_km + salarios_horas, 2)
     return {
         "estado": _estado(status),
         "gap_relativo": gap,
-        "costo_total": round(objetivo / 100, 2),
+        "costo_total": costo_total,
         "desglose": {"combustible": round(combustible, 2), "salarios_fijos": round(fijos, 2),
                      "salarios_km": round(salarios_km, 2),
                      "salarios_horas": round(salarios_horas, 2)},
