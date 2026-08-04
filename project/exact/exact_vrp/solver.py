@@ -37,6 +37,8 @@ def resolver(data):
 def _extraer(inst, m, solver, status):
     rutas, sin_usar = [], []
     combustible = 0.0
+    fijos = 0.0
+    salarios_km = 0.0
     for iv, v in enumerate(inst.vehiculos):
         if not solver.Value(m.usado[iv]):
             sin_usar.append(v.id)
@@ -53,12 +55,14 @@ def _extraer(inst, m, solver, status):
             nodo = siguiente
         litros = km * v.consumo_litros_km
         combustible += litros * inst.precio_litro
+        fijos += v.salario_fijo_cent / 100
+        salarios_km += km * v.salario_por_km
         rutas.append({
             "vehiculo": v.id,
             "paradas": [{"punto": inst.puntos[p - 1].id} for p in orden],
             "km": round(km, 2), "litros": round(litros, 2),
-            "costo": round(km * (v.consumo_litros_km * inst.precio_litro
-                                 + v.salario_por_km), 2),
+            "costo": round(km * (v.consumo_litros_km * inst.precio_litro + v.salario_por_km)
+                           + v.salario_fijo_cent / 100, 2),
         })
     objetivo = solver.ObjectiveValue()
     gap = 0.0 if status == cp_model.OPTIMAL or objetivo == 0 else round(
@@ -67,8 +71,8 @@ def _extraer(inst, m, solver, status):
         "estado": _estado(status),
         "gap_relativo": gap,
         "costo_total": round(objetivo / 100, 2),
-        "desglose": {"combustible": round(combustible, 2), "salarios_fijos": 0.0,
-                     "salarios_km": 0.0, "salarios_horas": 0.0},
+        "desglose": {"combustible": round(combustible, 2), "salarios_fijos": round(fijos, 2),
+                     "salarios_km": round(salarios_km, 2), "salarios_horas": 0.0},
         "rutas": rutas,
         "vehiculos_sin_usar": sin_usar,
         "tiempo_solver_s": round(solver.WallTime(), 2),

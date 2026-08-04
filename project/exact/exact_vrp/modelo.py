@@ -57,5 +57,7 @@ def construir_modelo(inst):
         for (jv, i, j), lit in m.x.items():
             if jv == iv:
                 costo.append(m.costo_arco[iv, i, j] * lit)
+    for iv, v in enumerate(inst.vehiculos):
+        costo.append(v.salario_fijo_cent * m.usado[iv])
     m.costo_cent = sum(costo)
     return m
