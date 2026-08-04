@@ -67,7 +67,11 @@ def construir_modelo(inst):
         costo.append(v.salario_fijo_cent * m.usado[iv])
 
     H = inst.horizonte_min
-    m.makespan = m.model.NewIntVar(0, H, "makespan")
+    # la ventana acota el INICIO de la descarga: una descarga puede terminar
+    # despues de H, asi que makespan necesita margen o podaria llegadas
+    # legitimas al final del horizonte
+    margen = max((p.descarga_min for p in inst.puntos), default=0)
+    m.makespan = m.model.NewIntVar(0, H + margen, "makespan")
     for p in range(1, n + 1):
         pt = inst.puntos[p - 1]
         tope = H - 1 if pt.limite_min is None else min(H - 1, pt.limite_min)
@@ -83,8 +87,18 @@ def construir_modelo(inst):
         m.model.Add(m.makespan >= llegada + pt.descarga_min)
 
     for iv, v in enumerate(inst.vehiculos):
+        # mismo problema que el makespan: si no se declaro turno, turno_fin
+        # cae exactamente en H (parsear_instancia), y el cierre de ruta
+        # (descarga + regreso) puede terminar despues de H aunque la llegada
+        # sea legitima. A diferencia del makespan, aqui el margen tambien
+        # debe cubrir el tramo de regreso a base, no solo la descarga. Un
+        # turno EXPLICITO si es un limite duro (nunca es numericamente igual
+        # a H: un HH:MM valido topa en 23:59) y no se relaja.
+        max_regreso = (max((m.tiempo_arco[iv, i, 0] for i in range(1, n + 1)), default=0)
+                       if v.regresa_a_base else 0)
+        fin_tope = v.turno_fin + margen + max_regreso if v.turno_fin == H else v.turno_fin
         salida = m.model.NewIntVar(v.turno_ini, v.turno_fin, f"salida_{v.id}")
-        fin = m.model.NewIntVar(v.turno_ini, v.turno_fin, f"fin_{v.id}")
+        fin = m.model.NewIntVar(v.turno_ini, fin_tope, f"fin_{v.id}")
         m.salida.append(salida)
         m.fin_ruta.append(fin)
         m.model.Add(fin == salida).OnlyEnforceIf(m.usado[iv].Not())

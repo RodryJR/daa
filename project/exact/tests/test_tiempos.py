@@ -49,3 +49,15 @@ def test_turno_acota_la_ruta():
     sol = resolver(data)
     assert sol["rutas"][0]["sale_de_base"]["hora"] >= "09:00"
     assert sol["rutas"][0]["regresa_a_base"]["hora"] <= "11:00"
+
+def test_descarga_al_final_del_horizonte_es_factible():
+    # la ventana acota el inicio de la descarga: llegar 23:50-23:55 con 10
+    # minutos de descarga es valido aunque la descarga termine pasado el
+    # horizonte; sin margen en makespan esto daba INFACTIBLE
+    data = _data(puntos=[punto(id="a", tiempo_descarga_min=10)],
+                 matriz_distancias_km=[[0, 30], [30, 0]])
+    data["puntos"][0]["ventanas"] = [{"desde": "23:50", "hasta": "23:55"}]
+    sol = resolver(data)
+    assert sol["estado"] == "OPTIMO"
+    hora = sol["rutas"][0]["paradas"][0]["llegada"]["hora"]
+    assert "23:50" <= hora <= "23:55"
