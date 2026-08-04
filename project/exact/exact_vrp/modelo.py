@@ -52,6 +52,12 @@ def construir_modelo(inst):
     for p in range(1, n + 1):
         m.model.AddExactlyOne(m.visita[iv, p] for iv in range(len(inst.vehiculos)))
 
+    for iv, v in enumerate(inst.vehiculos):
+        m.model.Add(sum(inst.puntos[p - 1].peso_g * m.visita[iv, p]
+                        for p in range(1, n + 1)) <= v.capacidad_peso_g)
+        m.model.Add(sum(inst.puntos[p - 1].volumen_l * m.visita[iv, p]
+                        for p in range(1, n + 1)) <= v.capacidad_volumen_l)
+
     costo = []
     for iv, v in enumerate(inst.vehiculos):
         for (jv, i, j), lit in m.x.items():

@@ -53,6 +53,8 @@ def _extraer(inst, m, solver, status):
                 break
             orden.append(siguiente)
             nodo = siguiente
+        peso = sum(inst.puntos[p - 1].peso_g for p in orden)
+        vol = sum(inst.puntos[p - 1].volumen_l for p in orden)
         litros = km * v.consumo_litros_km
         combustible += litros * inst.precio_litro
         fijos += v.salario_fijo_cent / 100
@@ -61,6 +63,8 @@ def _extraer(inst, m, solver, status):
             "vehiculo": v.id,
             "paradas": [{"punto": inst.puntos[p - 1].id} for p in orden],
             "km": round(km, 2), "litros": round(litros, 2),
+            "peso_cargado_kg": round(peso / 1000, 2),
+            "volumen_cargado_m3": round(vol / 1000, 2),
             "costo": round(km * (v.consumo_litros_km * inst.precio_litro + v.salario_por_km)
                            + v.salario_fijo_cent / 100, 2),
         })
