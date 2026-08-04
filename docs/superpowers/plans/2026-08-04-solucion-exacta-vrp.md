@@ -391,8 +391,11 @@ def test_instancia_sana_sin_errores():
     assert _diag(instancia_minima()) == []
 
 def test_punto_que_no_cabe_en_ningun_vehiculo():
-    data = instancia_minima()
-    data["puntos"][0]["productos"] = [{"peso_kg": 5000, "volumen_m3": 0.1}]
+    # dos vehiculos de 1000 kg: el punto de 1500 kg no cabe en ninguno por
+    # separado, pero la flota agregada (2000 kg) si alcanza, aislando el
+    # chequeo 1 del chequeo 2.
+    data = instancia_minima(vehiculos=[vehiculo(id="v1"), vehiculo(id="v2")])
+    data["puntos"][0]["productos"] = [{"peso_kg": 1500, "volumen_m3": 0.1}]
     errores = _diag(data)
     assert len(errores) == 1 and "p1" in errores[0] and "no cabe" in errores[0]
 
@@ -444,9 +447,13 @@ def diagnosticar(inst):
 
     peso_total = sum(p.peso_g for p in inst.puntos)
     vol_total = sum(p.volumen_l for p in inst.puntos)
-    if (peso_total > sum(v.capacidad_peso_g for v in inst.vehiculos)
-            or vol_total > sum(v.capacidad_volumen_l for v in inst.vehiculos)):
-        errores.append("la demanda total excede la capacidad agregada de la flota")
+    peso_flota = sum(v.capacidad_peso_g for v in inst.vehiculos)
+    vol_flota = sum(v.capacidad_volumen_l for v in inst.vehiculos)
+    if peso_total > peso_flota or vol_total > vol_flota:
+        errores.append(
+            f"la demanda total ({peso_total/1000:g} kg, {vol_total/1000:g} m3) "
+            f"excede la capacidad agregada de la flota "
+            f"({peso_flota/1000:g} kg, {vol_flota/1000:g} m3)")
 
     for p in inst.puntos:
         for ini, fin in p.ventanas:
@@ -503,7 +510,9 @@ cd /home/dario/daa && git add project/exact && git commit -m "exact: pre-chequeo
 from exact_vrp import resolver
 from util import instancia_minima, vehiculo, punto
 
-LINEA = [[0, 10, 20, 30], [10, 0, 10, 20], [20, 10, 0, 10], [30, 20, 10, 0]]
+# d(a,c)=25 (no 20) rompe el empate estructural de puntos colineales: solo
+# los ordenes a,b,c y c,b,a cuestan 60 km
+LINEA = [[0, 10, 20, 30], [10, 0, 10, 25], [20, 10, 0, 10], [30, 25, 10, 0]]
 
 def test_tsp_en_linea_optimo():
     data = instancia_minima(
@@ -578,6 +587,9 @@ def construir_modelo(inst):
             omitido = m.model.NewBoolVar(f"omite_{v.id}_{p}")
             arcos.append((p, p, omitido))
             m.visita[iv, p] = omitido.Not()
+        # sin esto, un vehiculo "no usado" podria formar un sub-circuito
+        # huerfano entre puntos sin pasar por la base
+        m.model.AddMaxEquality(usado, [m.visita[iv, p] for p in range(1, n + 1)])
         for i in nodos:
             for j in nodos:
                 if i != j:
@@ -1157,11 +1169,11 @@ OPTIMO; si FACTIBLE, el gap del makespan).
 ### Task 11: Estados no óptimos e infactibilidad del solver
 
 **Files:**
-- Modify: `project/exact/exact_vrp/solver.py` (si hiciera falta; el mapeo ya existe)
+- Modify: `project/exact/exact_vrp/solver.py`
 - Create: `project/exact/tests/test_estados.py`
 
 **Interfaces:**
-- Produces: comportamiento verificado de `INFACTIBLE` (del solver, no del diagnóstico), mapeo de estados y `gap_relativo`.
+- Produces: comportamiento verificado de `INFACTIBLE` (del solver, no del diagnóstico), mapeo de estados y `gap_relativo`. Además, TODA rama en la que el solver corrió incluye `tiempo_solver_s`, y `SIN_SOLUCION` incluye `motivo` accionable ("se agoto el limite de tiempo sin encontrar solucion; sube limite_tiempo_solver_s").
 
 - [ ] **Step 1: Tests en rojo (o verdes: verificar)**
 
@@ -1190,11 +1202,29 @@ def test_infactible_del_solver_con_motivo():
     sol = resolver(data)
     assert sol["estado"] == "INFACTIBLE"
     assert "ventanas" in sol["motivo"]
+    assert "tiempo_solver_s" in sol
 ```
 
-- [ ] **Step 2: Ejecutar** — `.venv/bin/python -m pytest tests/test_estados.py -v`. El segundo test debe dar INFACTIBLE; si devolviera otra cosa, hay un bug de modelado a investigar con systematic-debugging.
+- [ ] **Step 2: Ejecutar** — `.venv/bin/python -m pytest tests/test_estados.py -v`. El segundo test debe dar INFACTIBLE; si devolviera otra cosa, hay un bug de modelado a investigar con systematic-debugging. El assert de `tiempo_solver_s` queda en rojo hasta el Step 3.
 
-- [ ] **Step 3: Commit** — `git add project/exact && git commit -m "exact: estados del solver e infactibilidad"`
+- [ ] **Step 3: Uniformar la salida no exitosa** — en `resolver`, la rama de estados no exitosos queda exactamente así:
+
+```python
+    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        salida = {"estado": _estado(status),
+                  "tiempo_solver_s": round(solver.WallTime(), 2)}
+        if salida["estado"] == "INFACTIBLE":
+            salida["motivo"] = ("sin solucion que cumpla todas las restricciones "
+                                "(combinacion de ventanas, turnos y flota)")
+        else:
+            salida["motivo"] = ("se agoto el limite de tiempo sin encontrar "
+                                "solucion; sube limite_tiempo_solver_s")
+        return salida
+```
+
+Verificar verde: `.venv/bin/python -m pytest tests/ -v`.
+
+- [ ] **Step 4: Commit** — `git add project/exact && git commit -m "exact: estados del solver e infactibilidad"`
 
 ---
 
