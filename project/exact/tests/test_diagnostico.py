@@ -10,8 +10,11 @@ def test_instancia_sana_sin_errores():
     assert _diag(instancia_minima()) == []
 
 def test_punto_que_no_cabe_en_ningun_vehiculo():
-    data = instancia_minima()
-    data["puntos"][0]["productos"] = [{"peso_kg": 5000, "volumen_m3": 0.1}]
+    # dos vehiculos de 1000 kg: el punto de 1500 kg no cabe en ninguno por
+    # separado, pero la flota agregada (2000 kg) si alcanza, aislando el
+    # chequeo 1 del chequeo 2.
+    data = instancia_minima(vehiculos=[vehiculo(id="v1"), vehiculo(id="v2")])
+    data["puntos"][0]["productos"] = [{"peso_kg": 1500, "volumen_m3": 0.1}]
     errores = _diag(data)
     assert len(errores) == 1 and "p1" in errores[0] and "no cabe" in errores[0]
 
