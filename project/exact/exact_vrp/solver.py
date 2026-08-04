@@ -30,6 +30,20 @@ def _momento(minuto, modo):
     return momento
 
 
+def _valores(m, solver):
+    '''
+    Pares (variable, valor) de la solucion actual, para usarlos como pista.
+    '''
+    for lit in m.x.values():
+        yield lit, solver.Value(lit)
+    for iv in range(len(m.usado)):
+        yield m.usado[iv], solver.Value(m.usado[iv])
+        yield m.salida[iv], solver.Value(m.salida[iv])
+        yield m.fin_ruta[iv], solver.Value(m.fin_ruta[iv])
+    for llegada in m.llegada:
+        yield llegada, solver.Value(llegada)
+
+
 def resolver(data):
     inst = parsear_instancia(data)
     errores = diagnosticar(inst)
@@ -51,9 +65,21 @@ def resolver(data):
         m.model.Minimize(m.costo_cent)
         status = solver.Solve(m.model)
         if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            # se captura la solucion de fase 1 y se usa como pista (warm
+            # start) de la fase 2; si el desempate por tiempo no termina
+            # dentro del limite, se devuelve la solucion de costo optimo en
+            # vez de descartarla
+            respaldo = _extraer(inst, m, solver, status)
+            for variable, valor in _valores(m, solver):
+                m.model.AddHint(variable, valor)
             m.model.Add(m.costo_cent <= round(solver.ObjectiveValue()))
             m.model.Minimize(m.makespan)
             status = solver.Solve(m.model)
+            if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                respaldo["nota"] = ("el desempate por tiempo no termino dentro "
+                                    "del limite; se devuelve la solucion de "
+                                    "costo optimo")
+                return respaldo
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         salida = {"estado": _estado(status),
