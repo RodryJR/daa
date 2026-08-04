@@ -14,9 +14,13 @@ def diagnosticar(inst):
 
     peso_total = sum(p.peso_g for p in inst.puntos)
     vol_total = sum(p.volumen_l for p in inst.puntos)
-    if (peso_total > sum(v.capacidad_peso_g for v in inst.vehiculos)
-            or vol_total > sum(v.capacidad_volumen_l for v in inst.vehiculos)):
-        errores.append("la demanda total excede la capacidad agregada de la flota")
+    peso_flota = sum(v.capacidad_peso_g for v in inst.vehiculos)
+    vol_flota = sum(v.capacidad_volumen_l for v in inst.vehiculos)
+    if peso_total > peso_flota or vol_total > vol_flota:
+        errores.append(
+            f"la demanda total ({peso_total/1000:g} kg, {vol_total/1000:g} m3) "
+            f"excede la capacidad agregada de la flota "
+            f"({peso_flota/1000:g} kg, {vol_flota/1000:g} m3)")
 
     for p in inst.puntos:
         for ini, fin in p.ventanas:

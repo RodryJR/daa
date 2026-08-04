@@ -23,7 +23,8 @@ def test_demanda_total_excede_flota():
         matriz_distancias_km=[[0, 1, 1], [1, 0, 1], [1, 1, 0]],
         puntos=[punto(id="p1", productos=[{"peso_kg": 800, "volumen_m3": 1}]),
                 punto(id="p2", productos=[{"peso_kg": 800, "volumen_m3": 1}])])
-    assert any("excede" in e for e in _diag(data))
+    errores = _diag(data)
+    assert any("excede" in e and "1600" in e and "1000" in e for e in errores)
 
 def test_limite_anterior_a_ventanas():
     data = instancia_minima()
