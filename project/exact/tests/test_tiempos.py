@@ -68,7 +68,7 @@ def test_cierre_pasada_la_medianoche_marca_dia_siguiente():
     data = _data(vehiculos=[vehiculo(salario_por_hora=60)],
                  puntos=[punto(id="a", tiempo_descarga_min=10)],
                  matriz_distancias_km=[[0, 30], [30, 0]])
-    data["puntos"][0]["ventanas"] = [{"desde": "23:50", "hasta": "23:55"}]
+    data["puntos"][0]["ventanas"] = [{"desde": "23:50", "hasta": "23:50"}]
     sol = resolver(data)
     assert sol["estado"] == "OPTIMO"
     assert sol["rutas"][0]["sale_de_base"] == {"hora": "23:20"}
@@ -81,7 +81,7 @@ def test_cierre_pasado_el_horizonte_semanal_no_crashea():
                  matriz_distancias_km=[[0, 30], [30, 0]])
     data["modo"] = "varios_dias"
     data["horizonte_dias"] = 7
-    data["puntos"][0]["ventanas"] = [{"dia": "domingo", "desde": "23:50", "hasta": "23:55"}]
+    data["puntos"][0]["ventanas"] = [{"dia": "domingo", "desde": "23:50", "hasta": "23:50"}]
     sol = resolver(data)
     assert sol["estado"] == "OPTIMO"
     paradas = sol["rutas"][0]["paradas"]
