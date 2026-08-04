@@ -56,10 +56,14 @@ def resolver(data):
             status = solver.Solve(m.model)
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        salida = {"estado": _estado(status)}
+        salida = {"estado": _estado(status),
+                  "tiempo_solver_s": round(solver.WallTime(), 2)}
         if salida["estado"] == "INFACTIBLE":
             salida["motivo"] = ("sin solucion que cumpla todas las restricciones "
-                               "(combinacion de ventanas, turnos y flota)")
+                                "(combinacion de ventanas, turnos y flota)")
+        else:
+            salida["motivo"] = ("se agoto el limite de tiempo sin encontrar "
+                                "solucion; sube limite_tiempo_solver_s")
         return salida
     return _extraer(inst, m, solver, status)
 
