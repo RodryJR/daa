@@ -97,11 +97,19 @@ def parsear_instancia(data):
     limite_s = _numero(data.get("limite_tiempo_solver_s", 60), "limite_tiempo_solver_s")
 
     crudos_v = data.get("vehiculos") or []
+    if not isinstance(crudos_v, list):
+        raise ErrorInstancia("vehiculos debe ser una lista")
     if not crudos_v:
         raise ErrorInstancia("se necesita al menos un vehiculo")
     vehiculos = []
     for cv in crudos_v:
+        if not isinstance(cv, dict):
+            raise ErrorInstancia("cada vehiculo debe ser un objeto")
+        if "id" not in cv or cv.get("id") is None:
+            raise ErrorInstancia("cada vehiculo necesita un id")
         turno = cv.get("turno")
+        if turno is not None and not isinstance(turno, dict):
+            raise ErrorInstancia(f"turno de {cv.get('id')} debe ser un objeto")
         t_ini, t_fin = (0, horizonte) if turno is None else _rango(turno, f"turno de {cv.get('id')}", modo, horizonte)
         vehiculos.append(Vehiculo(
             id=str(cv.get("id")),
@@ -120,18 +128,31 @@ def parsear_instancia(data):
         raise ErrorInstancia("hay ids de vehiculo repetidos")
 
     crudos_p = data.get("puntos") or []
+    if not isinstance(crudos_p, list):
+        raise ErrorInstancia("puntos debe ser una lista")
     if not crudos_p:
         raise ErrorInstancia("se necesita al menos un punto de entrega")
     puntos = []
     for cp in crudos_p:
+        if not isinstance(cp, dict):
+            raise ErrorInstancia("cada punto debe ser un objeto")
+        if "id" not in cp or cp.get("id") is None:
+            raise ErrorInstancia("cada punto necesita un id")
         productos = cp.get("productos") or []
+        if not isinstance(productos, list):
+            raise ErrorInstancia(f"productos de {cp.get('id')} debe ser una lista")
         if not productos:
             raise ErrorInstancia(f"el punto {cp.get('id')} no tiene productos")
         peso = sum(_numero(pr.get("peso_kg", 0), "peso_kg") for pr in productos)
         vol = sum(_numero(pr.get("volumen_m3", 0), "volumen_m3") for pr in productos)
+        ventanas_raw = cp.get("ventanas") or []
+        if not isinstance(ventanas_raw, list):
+            raise ErrorInstancia(f"ventanas de {cp.get('id')} debe ser una lista")
         ventanas = [_rango(v, f"ventana de {cp.get('id')}", modo, horizonte)
-                    for v in (cp.get("ventanas") or [])]
+                    for v in ventanas_raw]
         lim = cp.get("fecha_limite")
+        if lim is not None and not isinstance(lim, dict):
+            raise ErrorInstancia(f"fecha_limite de {cp.get('id')} debe ser un objeto")
         limite = None if lim is None else minuto_absoluto(
             lim.get("dia"), lim.get("hora"), modo, f"fecha_limite de {cp.get('id')}")
         puntos.append(Punto(

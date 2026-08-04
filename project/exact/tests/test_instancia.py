@@ -60,3 +60,51 @@ def test_validaciones(romper, mensaje):
     with pytest.raises(ErrorInstancia) as e:
         parsear_instancia(data)
     assert mensaje in str(e.value).lower()
+
+def test_vehiculos_as_dict_rechaza():
+    """Vehiculos debe ser lista, no dict."""
+    data = instancia_minima()
+    data["vehiculos"] = {"v1": {"id": "v1"}}
+    with pytest.raises(ErrorInstancia) as e:
+        parsear_instancia(data)
+    assert "vehiculo" in str(e.value).lower()
+
+def test_vehiculo_entry_as_string_rechaza():
+    """Una entrada en vehiculos debe ser dict, no string."""
+    data = instancia_minima()
+    data["vehiculos"] = ["v1"]
+    with pytest.raises(ErrorInstancia) as e:
+        parsear_instancia(data)
+    assert "vehiculo" in str(e.value).lower()
+
+def test_productos_as_dict_rechaza():
+    """Productos debe ser lista, no dict."""
+    data = instancia_minima()
+    data["puntos"][0]["productos"] = {"p1": {"peso_kg": 10}}
+    with pytest.raises(ErrorInstancia) as e:
+        parsear_instancia(data)
+    assert "producto" in str(e.value).lower()
+
+def test_turno_as_string_rechaza():
+    """Turno debe ser dict, no string."""
+    data = instancia_minima()
+    data["vehiculos"][0]["turno"] = "09:00-17:00"
+    with pytest.raises(ErrorInstancia) as e:
+        parsear_instancia(data)
+    assert "turno" in str(e.value).lower()
+
+def test_vehiculo_sin_id():
+    """Vehiculo sin id debe rechazarse."""
+    data = instancia_minima()
+    del data["vehiculos"][0]["id"]
+    with pytest.raises(ErrorInstancia) as e:
+        parsear_instancia(data)
+    assert "vehiculo" in str(e.value).lower() and "id" in str(e.value).lower()
+
+def test_punto_sin_id():
+    """Punto sin id debe rechazarse."""
+    data = instancia_minima()
+    del data["puntos"][0]["id"]
+    with pytest.raises(ErrorInstancia) as e:
+        parsear_instancia(data)
+    assert "punto" in str(e.value).lower() and "id" in str(e.value).lower()
