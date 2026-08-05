@@ -391,8 +391,11 @@ def test_instancia_sana_sin_errores():
     assert _diag(instancia_minima()) == []
 
 def test_punto_que_no_cabe_en_ningun_vehiculo():
-    data = instancia_minima()
-    data["puntos"][0]["productos"] = [{"peso_kg": 5000, "volumen_m3": 0.1}]
+    # dos vehiculos de 1000 kg: el punto de 1500 kg no cabe en ninguno por
+    # separado, pero la flota agregada (2000 kg) si alcanza, aislando el
+    # chequeo 1 del chequeo 2.
+    data = instancia_minima(vehiculos=[vehiculo(id="v1"), vehiculo(id="v2")])
+    data["puntos"][0]["productos"] = [{"peso_kg": 1500, "volumen_m3": 0.1}]
     errores = _diag(data)
     assert len(errores) == 1 and "p1" in errores[0] and "no cabe" in errores[0]
 
@@ -444,9 +447,13 @@ def diagnosticar(inst):
 
     peso_total = sum(p.peso_g for p in inst.puntos)
     vol_total = sum(p.volumen_l for p in inst.puntos)
-    if (peso_total > sum(v.capacidad_peso_g for v in inst.vehiculos)
-            or vol_total > sum(v.capacidad_volumen_l for v in inst.vehiculos)):
-        errores.append("la demanda total excede la capacidad agregada de la flota")
+    peso_flota = sum(v.capacidad_peso_g for v in inst.vehiculos)
+    vol_flota = sum(v.capacidad_volumen_l for v in inst.vehiculos)
+    if peso_total > peso_flota or vol_total > vol_flota:
+        errores.append(
+            f"la demanda total ({peso_total/1000:g} kg, {vol_total/1000:g} m3) "
+            f"excede la capacidad agregada de la flota "
+            f"({peso_flota/1000:g} kg, {vol_flota/1000:g} m3)")
 
     for p in inst.puntos:
         for ini, fin in p.ventanas:
@@ -503,7 +510,9 @@ cd /home/dario/daa && git add project/exact && git commit -m "exact: pre-chequeo
 from exact_vrp import resolver
 from util import instancia_minima, vehiculo, punto
 
-LINEA = [[0, 10, 20, 30], [10, 0, 10, 20], [20, 10, 0, 10], [30, 20, 10, 0]]
+# d(a,c)=25 (no 20) rompe el empate estructural de puntos colineales: solo
+# los ordenes a,b,c y c,b,a cuestan 60 km
+LINEA = [[0, 10, 20, 30], [10, 0, 10, 25], [20, 10, 0, 10], [30, 25, 10, 0]]
 
 def test_tsp_en_linea_optimo():
     data = instancia_minima(
@@ -578,6 +587,9 @@ def construir_modelo(inst):
             omitido = m.model.NewBoolVar(f"omite_{v.id}_{p}")
             arcos.append((p, p, omitido))
             m.visita[iv, p] = omitido.Not()
+        # sin esto, un vehiculo "no usado" podria formar un sub-circuito
+        # huerfano entre puntos sin pasar por la base
+        m.model.AddMaxEquality(usado, [m.visita[iv, p] for p in range(1, n + 1)])
         for i in nodos:
             for j in nodos:
                 if i != j:
@@ -919,7 +931,11 @@ def test_turno_acota_la_ruta():
 
 ```python
     H = inst.horizonte_min
-    m.makespan = m.model.NewIntVar(0, H, "makespan")
+    # la ventana acota el INICIO de la descarga: una descarga puede terminar
+    # despues de H, asi que makespan necesita margen o podaria llegadas
+    # legitimas al final del horizonte
+    margen = max((p.descarga_min for p in inst.puntos), default=0)
+    m.makespan = m.model.NewIntVar(0, H + margen, "makespan")
     for p in range(1, n + 1):
         pt = inst.puntos[p - 1]
         tope = H - 1 if pt.limite_min is None else min(H - 1, pt.limite_min)
@@ -935,8 +951,18 @@ def test_turno_acota_la_ruta():
         m.model.Add(m.makespan >= llegada + pt.descarga_min)
 
     for iv, v in enumerate(inst.vehiculos):
+        # mismo problema que el makespan: si no se declaro turno, turno_fin
+        # cae exactamente en H (parsear_instancia), y el cierre de ruta
+        # (descarga + regreso) puede terminar despues de H aunque la llegada
+        # sea legitima. A diferencia del makespan, aqui el margen tambien
+        # debe cubrir el tramo de regreso a base, no solo la descarga. Un
+        # turno EXPLICITO si es un limite duro (nunca es numericamente igual
+        # a H: un HH:MM valido topa en 23:59) y no se relaja.
+        max_regreso = (max((m.tiempo_arco[iv, i, 0] for i in range(1, n + 1)), default=0)
+                       if v.regresa_a_base else 0)
+        fin_tope = v.turno_fin + margen + max_regreso if v.turno_fin == H else v.turno_fin
         salida = m.model.NewIntVar(v.turno_ini, v.turno_fin, f"salida_{v.id}")
-        fin = m.model.NewIntVar(v.turno_ini, v.turno_fin, f"fin_{v.id}")
+        fin = m.model.NewIntVar(v.turno_ini, fin_tope, f"fin_{v.id}")
         m.salida.append(salida)
         m.fin_ruta.append(fin)
         m.model.Add(fin == salida).OnlyEnforceIf(m.usado[iv].Not())
@@ -952,6 +978,10 @@ def test_turno_acota_la_ruta():
             regreso = m.tiempo_arco[iv, i, 0] if v.regresa_a_base else 0
             m.model.Add(fin >= m.llegada[i - 1] + desc + regreso
                         ).OnlyEnforceIf(m.x[iv, i, 0])
+            # espejo: sin salario por hora nada fija fin/salida y CP-SAT
+            # reportaria tiempos basura; las igualdades son neutrales al costo
+            m.model.Add(fin <= m.llegada[i - 1] + desc + regreso
+                        ).OnlyEnforceIf(m.x[iv, i, 0])
         costo.append(v.salario_cent_min * (fin - salida))
 ```
 
@@ -962,10 +992,21 @@ En `solver.py`:
 from exact_vrp.instancia import DIAS, MINUTOS_DIA, parsear_instancia
 
 def _momento(minuto, modo):
+    '''
+    Los eventos de cierre (fin de descarga, regreso) pueden caer pasado el
+    fin del horizonte; se marca el desborde en vez de crashear o mentir.
+    '''
     hora = f"{(minuto % MINUTOS_DIA) // 60:02d}:{minuto % 60:02d}"
+    dias = minuto // MINUTOS_DIA
     if modo == "un_dia":
-        return {"hora": hora}
-    return {"dia": DIAS[minuto // MINUTOS_DIA], "hora": hora}
+        momento = {"hora": hora}
+        if dias > 0:
+            momento["dia_siguiente"] = True
+        return momento
+    momento = {"dia": DIAS[dias % 7], "hora": hora}
+    if dias >= 7:
+        momento["semana_siguiente"] = True
+    return momento
 ```
 
 En `_extraer`: por ruta usada añadir `"sale_de_base": _momento(solver.Value(m.salida[iv]), inst.modo)`; por parada `"llegada"` y `"fin_descarga"` (llegada + descarga); si `v.regresa_a_base`, `"regresa_a_base": _momento(solver.Value(m.fin_ruta[iv]), inst.modo)`; acumular `salarios_horas += v.salario_cent_min * (fin - salida) / 100` y sumarlo al `costo` de la ruta; al dict raíz añadir `"fin_ultima_entrega": _momento(max(solver.Value(m.llegada[p]) + inst.puntos[p].descarga_min for p in range(len(inst.puntos))), inst.modo)`.
@@ -1137,9 +1178,38 @@ def test_objetivo_tiempo_minimiza_makespan():
         m.model.Minimize(m.costo_cent)
         status = solver.Solve(m.model)
         if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            # se captura la solucion de fase 1 y se usa como pista (warm
+            # start) de la fase 2; si el desempate por tiempo no termina
+            # dentro del limite, se devuelve la solucion de costo optimo en
+            # vez de descartarla
+            respaldo = _extraer(inst, m, solver, status)
+            for variable, valor in _valores(m, solver):
+                m.model.AddHint(variable, valor)
             m.model.Add(m.costo_cent <= round(solver.ObjectiveValue()))
             m.model.Minimize(m.makespan)
             status = solver.Solve(m.model)
+            if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                respaldo["nota"] = ("el desempate por tiempo no termino dentro "
+                                    "del limite; se devuelve la solucion de "
+                                    "costo optimo")
+                return respaldo
+```
+
+con el helper (en solver.py, junto a `_momento`):
+
+```python
+def _valores(m, solver):
+    '''
+    Pares (variable, valor) de la solucion actual, para usarlos como pista.
+    '''
+    for lit in m.x.values():
+        yield lit, solver.Value(lit)
+    for iv in range(len(m.usado)):
+        yield m.usado[iv], solver.Value(m.usado[iv])
+        yield m.salida[iv], solver.Value(m.salida[iv])
+        yield m.fin_ruta[iv], solver.Value(m.fin_ruta[iv])
+    for llegada in m.llegada:
+        yield llegada, solver.Value(llegada)
 ```
 
 En `_extraer`, no usar `solver.ObjectiveValue()` como costo: calcular
@@ -1157,11 +1227,11 @@ OPTIMO; si FACTIBLE, el gap del makespan).
 ### Task 11: Estados no óptimos e infactibilidad del solver
 
 **Files:**
-- Modify: `project/exact/exact_vrp/solver.py` (si hiciera falta; el mapeo ya existe)
+- Modify: `project/exact/exact_vrp/solver.py`
 - Create: `project/exact/tests/test_estados.py`
 
 **Interfaces:**
-- Produces: comportamiento verificado de `INFACTIBLE` (del solver, no del diagnóstico), mapeo de estados y `gap_relativo`.
+- Produces: comportamiento verificado de `INFACTIBLE` (del solver, no del diagnóstico), mapeo de estados y `gap_relativo`. Además, TODA rama en la que el solver corrió incluye `tiempo_solver_s`, y `SIN_SOLUCION` incluye `motivo` accionable ("se agoto el limite de tiempo sin encontrar solucion; sube limite_tiempo_solver_s").
 
 - [ ] **Step 1: Tests en rojo (o verdes: verificar)**
 
@@ -1190,11 +1260,29 @@ def test_infactible_del_solver_con_motivo():
     sol = resolver(data)
     assert sol["estado"] == "INFACTIBLE"
     assert "ventanas" in sol["motivo"]
+    assert "tiempo_solver_s" in sol
 ```
 
-- [ ] **Step 2: Ejecutar** — `.venv/bin/python -m pytest tests/test_estados.py -v`. El segundo test debe dar INFACTIBLE; si devolviera otra cosa, hay un bug de modelado a investigar con systematic-debugging.
+- [ ] **Step 2: Ejecutar** — `.venv/bin/python -m pytest tests/test_estados.py -v`. El segundo test debe dar INFACTIBLE; si devolviera otra cosa, hay un bug de modelado a investigar con systematic-debugging. El assert de `tiempo_solver_s` queda en rojo hasta el Step 3.
 
-- [ ] **Step 3: Commit** — `git add project/exact && git commit -m "exact: estados del solver e infactibilidad"`
+- [ ] **Step 3: Uniformar la salida no exitosa** — en `resolver`, la rama de estados no exitosos queda exactamente así:
+
+```python
+    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        salida = {"estado": _estado(status),
+                  "tiempo_solver_s": round(solver.WallTime(), 2)}
+        if salida["estado"] == "INFACTIBLE":
+            salida["motivo"] = ("sin solucion que cumpla todas las restricciones "
+                                "(combinacion de ventanas, turnos y flota)")
+        else:
+            salida["motivo"] = ("se agoto el limite de tiempo sin encontrar "
+                                "solucion; sube limite_tiempo_solver_s")
+        return salida
+```
+
+Verificar verde: `.venv/bin/python -m pytest tests/ -v`.
+
+- [ ] **Step 4: Commit** — `git add project/exact && git commit -m "exact: estados del solver e infactibilidad"`
 
 ---
 

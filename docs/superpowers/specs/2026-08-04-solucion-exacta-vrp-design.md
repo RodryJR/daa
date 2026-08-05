@@ -122,7 +122,12 @@ Reglas:
 ```
 
 En modo `un_dia` los campos de tiempo omiten `dia`. Si `regresa_a_base` es
-false, la ruta no incluye ese campo. `INFACTIBLE` incluye `motivo` con el
+false, la ruta no incluye ese campo. Las ventanas acotan el INICIO de la
+descarga, así que los eventos de cierre (fin de descarga, regreso a base)
+pueden caer pasado el fin del horizonte: en ese caso el momento incluye
+`"dia_siguiente": true` (modo un_dia, cruzó medianoche) o
+`"semana_siguiente": true` (varios_dias con horizonte de 7 días, el nombre
+del día vuelve a empezar). Sin desborde, esos campos no aparecen. `INFACTIBLE` incluye `motivo` con el
 diagnóstico. `FACTIBLE` = se agotó el límite de tiempo: mejor solución
 encontrada + `gap_relativo` certificado (cota superior de distancia al óptimo).
 `SIN_SOLUCION` = se agotó el límite sin encontrar solución ni probar
@@ -156,7 +161,11 @@ infactibilidad; el remedio es subir `limite_tiempo_solver_s`.
   Modos: `costo` (una resolución), `tiempo` (minimiza
   `max_p fin_descarga[p]`), `costo_luego_tiempo` (lexicográfico exacto: 1ª
   resolución minimiza costo C*; 2ª fija costo ≤ C* y minimiza el makespan de
-  entregas).
+  entregas). La solución de la 1ª fase se pasa como pista (warm start) a la
+  2ª; si aun así la 2ª fase no termina dentro del límite, se devuelve la
+  solución de costo óptimo de la 1ª fase con el campo `nota` explicando que
+  el desempate por tiempo quedó incompleto (nunca se descarta una solución
+  encontrada).
 
 ## Diagnóstico de infactibilidad (pre-chequeos)
 
