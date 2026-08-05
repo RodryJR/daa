@@ -143,11 +143,17 @@ def parsear_instancia(data):
             raise ErrorInstancia(f"productos de {cp.get('id')} debe ser una lista")
         if not productos:
             raise ErrorInstancia(f"el punto {cp.get('id')} no tiene productos")
+        for pr in productos:
+            if not isinstance(pr, dict):
+                raise ErrorInstancia(f"cada producto de {cp.get('id')} debe ser un objeto")
         peso = sum(_numero(pr.get("peso_kg", 0), "peso_kg") for pr in productos)
         vol = sum(_numero(pr.get("volumen_m3", 0), "volumen_m3") for pr in productos)
         ventanas_raw = cp.get("ventanas") or []
         if not isinstance(ventanas_raw, list):
             raise ErrorInstancia(f"ventanas de {cp.get('id')} debe ser una lista")
+        for v in ventanas_raw:
+            if not isinstance(v, dict):
+                raise ErrorInstancia(f"cada ventana de {cp.get('id')} debe ser un objeto")
         ventanas = [_rango(v, f"ventana de {cp.get('id')}", modo, horizonte)
                     for v in ventanas_raw]
         lim = cp.get("fecha_limite")

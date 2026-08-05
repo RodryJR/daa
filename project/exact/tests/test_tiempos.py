@@ -75,6 +75,34 @@ def test_cierre_pasada_la_medianoche_marca_dia_siguiente():
     assert sol["rutas"][0]["regresa_a_base"] == {"hora": "00:30", "dia_siguiente": True}
 
 
+def test_horas_de_ruta_exactas_sin_salario_por_hora():
+    # sin salario por hora nada del objetivo fija salida/fin: antes de la
+    # restriccion espejo, CP-SAT reporta salida = turno_ini (00:00) en vez
+    # de la hora real, aunque la llegada a cada punto este fijada por una
+    # ventana puntual (verificado empiricamente contra el modelo sin el
+    # fix: ver fix-wave-report.md, hallazgo 1). Ambos puntos con ventana
+    # de un solo instante (desde == hasta) para que el orden quede forzado
+    # por factibilidad de la cadena de llegadas (no por un empate de
+    # costo, que seria fragil) y el horario completo quede determinado
+    # sin ambiguedad una vez aplicado el fix:
+    #   b fijo a las 01:30 (viaje directo base->b = 60': hay 30' de
+    #   holgura frente al viaje directo, asi que "salida" tiene libertad
+    #   real antes del fix); a fijo a las 02:40 (b->a = 30', asi que
+    #   a-antes-de-b es infactible: exigiria b >= 03:10, mas tarde que su
+    #   ventana). Horario real: sale 00:30 (llegada b 01:30 menos viaje
+    #   60'), llega a b 01:30, llega a a 02:40, regresa 03:10 (llegada a
+    #   + descarga 0 + regreso 30').
+    data = _data()
+    data["puntos"][0]["ventanas"] = [{"desde": "02:40", "hasta": "02:40"}]  # a
+    data["puntos"][1]["ventanas"] = [{"desde": "01:30", "hasta": "01:30"}]  # b
+    sol = resolver(data)
+    assert sol["estado"] == "OPTIMO"
+    orden = [p["punto"] for p in sol["rutas"][0]["paradas"]]
+    assert orden == ["b", "a"]
+    assert sol["rutas"][0]["sale_de_base"] == {"hora": "00:30"}
+    assert sol["rutas"][0]["regresa_a_base"] == {"hora": "03:10"}
+
+
 def test_cierre_pasado_el_horizonte_semanal_no_crashea():
     data = _data(vehiculos=[vehiculo(salario_por_hora=60)],
                  puntos=[punto(id="a", tiempo_descarga_min=10)],

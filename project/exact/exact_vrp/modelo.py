@@ -105,6 +105,8 @@ def construir_modelo(inst):
         for j in range(1, n + 1):
             m.model.Add(m.llegada[j - 1] >= salida + m.tiempo_arco[iv, 0, j]
                         ).OnlyEnforceIf(m.x[iv, 0, j])
+            m.model.Add(salida >= m.llegada[j - 1] - m.tiempo_arco[iv, 0, j]
+                        ).OnlyEnforceIf(m.x[iv, 0, j])
         for i in range(1, n + 1):
             desc = inst.puntos[i - 1].descarga_min
             for j in range(1, n + 1):
@@ -113,6 +115,8 @@ def construir_modelo(inst):
                                 + m.tiempo_arco[iv, i, j]).OnlyEnforceIf(m.x[iv, i, j])
             regreso = m.tiempo_arco[iv, i, 0] if v.regresa_a_base else 0
             m.model.Add(fin >= m.llegada[i - 1] + desc + regreso
+                        ).OnlyEnforceIf(m.x[iv, i, 0])
+            m.model.Add(fin <= m.llegada[i - 1] + desc + regreso
                         ).OnlyEnforceIf(m.x[iv, i, 0])
         costo.append(v.salario_cent_min * (fin - salida))
     m.costo_cent = sum(costo)

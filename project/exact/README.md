@@ -68,6 +68,19 @@ espera `json.dump`); no toca el disco ni guarda estado entre llamadas, así que
 es seguro embeberlo en otro sistema (un endpoint HTTP, un job programado,
 etc.) y llamarlo repetidamente con instancias distintas.
 
+**Contrato de excepciones**: `resolver` solo lanza excepción cuando la
+entrada está mal formada — JSON con campos del tipo equivocado, contenedores
+que debían ser lista, `matriz_distancias_km` con dimensiones o valores
+inválidos, etc. En ese caso lanza `ErrorInstancia` (subclase de
+`ValueError`, exportada como `from exact_vrp import ErrorInstancia`); esto
+incluye el punto 5 de los pre-chequeos de diagnóstico de la especificación
+("matriz mal formada"), que en la implementación se resuelve como error de
+parseo en vez de como chequeo de `diagnostico.py`. Una instancia bien
+formada pero sin solución posible **no** lanza excepción: `resolver`
+devuelve normalmente `{"estado": "INFACTIBLE", "motivo": "..."}` (ver
+[Estados](#estados)). En resumen: excepción = "no sé leer esta entrada";
+`INFACTIBLE` = "la leí bien y no tiene solución".
+
 ### Como CLI
 
 ```bash
@@ -332,6 +345,23 @@ la suma de `costo` de cada ruta, pero con **flotas de 2+ vehículos y
 consumos fraccionarios** puede diferir en ±1 centavo de esa suma, por
 acumulación independiente de redondeos — no es un error, es la diferencia
 entre redondear la suma y sumar los redondeados.
+
+## Limitaciones conocidas
+
+- El chequeo de alcanzabilidad del **pre-diagnóstico** (el que corre antes
+  de invocar CP-SAT, ver [Estados](#estados)) estima la llegada mínima
+  posible a cada punto usando el arco directo base→punto: con matrices que
+  violan la desigualdad triangular puede declarar `INFACTIBLE` de más — se
+  asume matriz métrica, que es la que garantiza que el arco directo sea la
+  distancia mínima entre dos puntos.
+- Los tiempos reportados son **una** agenda factible óptima, no la única:
+  el costo no distingue entre agendas que difieren solo en cuándo cae la
+  espera, así que esta puede aparecer como una salida de base más tardía
+  o como tiempo muerto ante un cliente cuya ventana todavía no abrió.
+- Ventanas que cruzan la medianoche (`desde > hasta` dentro del mismo
+  día) no son expresables directamente; hay que partirlas en dos ventanas
+  (una hasta las 23:59, otra desde las 00:00) o, en modo `varios_dias`,
+  usar el día siguiente.
 
 ## Límites prácticos y rendimiento
 

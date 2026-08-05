@@ -85,6 +85,22 @@ def test_productos_as_dict_rechaza():
         parsear_instancia(data)
     assert "producto" in str(e.value).lower()
 
+def test_producto_entry_as_string_rechaza():
+    """Una entrada en productos debe ser dict, no string."""
+    data = instancia_minima()
+    data["puntos"][0]["productos"] = ["x"]
+    with pytest.raises(ErrorInstancia) as e:
+        parsear_instancia(data)
+    assert "producto" in str(e.value).lower()
+
+def test_ventana_entry_as_string_rechaza():
+    """Una entrada en ventanas debe ser dict, no string."""
+    data = instancia_minima()
+    data["puntos"][0]["ventanas"] = ["x"]
+    with pytest.raises(ErrorInstancia) as e:
+        parsear_instancia(data)
+    assert "ventana" in str(e.value).lower()
+
 def test_turno_as_string_rechaza():
     """Turno debe ser dict, no string."""
     data = instancia_minima()
