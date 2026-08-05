@@ -978,6 +978,10 @@ def test_turno_acota_la_ruta():
             regreso = m.tiempo_arco[iv, i, 0] if v.regresa_a_base else 0
             m.model.Add(fin >= m.llegada[i - 1] + desc + regreso
                         ).OnlyEnforceIf(m.x[iv, i, 0])
+            # espejo: sin salario por hora nada fija fin/salida y CP-SAT
+            # reportaria tiempos basura; las igualdades son neutrales al costo
+            m.model.Add(fin <= m.llegada[i - 1] + desc + regreso
+                        ).OnlyEnforceIf(m.x[iv, i, 0])
         costo.append(v.salario_cent_min * (fin - salida))
 ```
 
