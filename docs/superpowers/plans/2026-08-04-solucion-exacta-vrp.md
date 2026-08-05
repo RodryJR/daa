@@ -931,7 +931,11 @@ def test_turno_acota_la_ruta():
 
 ```python
     H = inst.horizonte_min
-    m.makespan = m.model.NewIntVar(0, H, "makespan")
+    # la ventana acota el INICIO de la descarga: una descarga puede terminar
+    # despues de H, asi que makespan necesita margen o podaria llegadas
+    # legitimas al final del horizonte
+    margen = max((p.descarga_min for p in inst.puntos), default=0)
+    m.makespan = m.model.NewIntVar(0, H + margen, "makespan")
     for p in range(1, n + 1):
         pt = inst.puntos[p - 1]
         tope = H - 1 if pt.limite_min is None else min(H - 1, pt.limite_min)
@@ -947,8 +951,18 @@ def test_turno_acota_la_ruta():
         m.model.Add(m.makespan >= llegada + pt.descarga_min)
 
     for iv, v in enumerate(inst.vehiculos):
+        # mismo problema que el makespan: si no se declaro turno, turno_fin
+        # cae exactamente en H (parsear_instancia), y el cierre de ruta
+        # (descarga + regreso) puede terminar despues de H aunque la llegada
+        # sea legitima. A diferencia del makespan, aqui el margen tambien
+        # debe cubrir el tramo de regreso a base, no solo la descarga. Un
+        # turno EXPLICITO si es un limite duro (nunca es numericamente igual
+        # a H: un HH:MM valido topa en 23:59) y no se relaja.
+        max_regreso = (max((m.tiempo_arco[iv, i, 0] for i in range(1, n + 1)), default=0)
+                       if v.regresa_a_base else 0)
+        fin_tope = v.turno_fin + margen + max_regreso if v.turno_fin == H else v.turno_fin
         salida = m.model.NewIntVar(v.turno_ini, v.turno_fin, f"salida_{v.id}")
-        fin = m.model.NewIntVar(v.turno_ini, v.turno_fin, f"fin_{v.id}")
+        fin = m.model.NewIntVar(v.turno_ini, fin_tope, f"fin_{v.id}")
         m.salida.append(salida)
         m.fin_ruta.append(fin)
         m.model.Add(fin == salida).OnlyEnforceIf(m.usado[iv].Not())
@@ -974,10 +988,21 @@ En `solver.py`:
 from exact_vrp.instancia import DIAS, MINUTOS_DIA, parsear_instancia
 
 def _momento(minuto, modo):
+    '''
+    Los eventos de cierre (fin de descarga, regreso) pueden caer pasado el
+    fin del horizonte; se marca el desborde en vez de crashear o mentir.
+    '''
     hora = f"{(minuto % MINUTOS_DIA) // 60:02d}:{minuto % 60:02d}"
+    dias = minuto // MINUTOS_DIA
     if modo == "un_dia":
-        return {"hora": hora}
-    return {"dia": DIAS[minuto // MINUTOS_DIA], "hora": hora}
+        momento = {"hora": hora}
+        if dias > 0:
+            momento["dia_siguiente"] = True
+        return momento
+    momento = {"dia": DIAS[dias % 7], "hora": hora}
+    if dias >= 7:
+        momento["semana_siguiente"] = True
+    return momento
 ```
 
 En `_extraer`: por ruta usada añadir `"sale_de_base": _momento(solver.Value(m.salida[iv]), inst.modo)`; por parada `"llegada"` y `"fin_descarga"` (llegada + descarga); si `v.regresa_a_base`, `"regresa_a_base": _momento(solver.Value(m.fin_ruta[iv]), inst.modo)`; acumular `salarios_horas += v.salario_cent_min * (fin - salida) / 100` y sumarlo al `costo` de la ruta; al dict raíz añadir `"fin_ultima_entrega": _momento(max(solver.Value(m.llegada[p]) + inst.puntos[p].descarga_min for p in range(len(inst.puntos))), inst.modo)`.
@@ -1149,9 +1174,38 @@ def test_objetivo_tiempo_minimiza_makespan():
         m.model.Minimize(m.costo_cent)
         status = solver.Solve(m.model)
         if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            # se captura la solucion de fase 1 y se usa como pista (warm
+            # start) de la fase 2; si el desempate por tiempo no termina
+            # dentro del limite, se devuelve la solucion de costo optimo en
+            # vez de descartarla
+            respaldo = _extraer(inst, m, solver, status)
+            for variable, valor in _valores(m, solver):
+                m.model.AddHint(variable, valor)
             m.model.Add(m.costo_cent <= round(solver.ObjectiveValue()))
             m.model.Minimize(m.makespan)
             status = solver.Solve(m.model)
+            if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                respaldo["nota"] = ("el desempate por tiempo no termino dentro "
+                                    "del limite; se devuelve la solucion de "
+                                    "costo optimo")
+                return respaldo
+```
+
+con el helper (en solver.py, junto a `_momento`):
+
+```python
+def _valores(m, solver):
+    '''
+    Pares (variable, valor) de la solucion actual, para usarlos como pista.
+    '''
+    for lit in m.x.values():
+        yield lit, solver.Value(lit)
+    for iv in range(len(m.usado)):
+        yield m.usado[iv], solver.Value(m.usado[iv])
+        yield m.salida[iv], solver.Value(m.salida[iv])
+        yield m.fin_ruta[iv], solver.Value(m.fin_ruta[iv])
+    for llegada in m.llegada:
+        yield llegada, solver.Value(llegada)
 ```
 
 En `_extraer`, no usar `solver.ObjectiveValue()` como costo: calcular
